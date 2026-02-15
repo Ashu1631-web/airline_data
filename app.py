@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from fpdf import FPDF
-import os
 
 # ===============================
 # PAGE CONFIG
@@ -14,15 +13,47 @@ st.set_page_config(
 )
 
 # ===============================
+# DURATION CONVERTER FUNCTION
+# ===============================
+def convert_duration_to_minutes(duration):
+    """Convert Duration like '2h 30m' into total minutes"""
+    if pd.isna(duration):
+        return 0
+
+    duration = str(duration)
+    hours = 0
+    minutes = 0
+
+    if "h" in duration:
+        try:
+            hours = int(duration.split("h")[0])
+        except:
+            hours = 0
+
+    if "m" in duration:
+        try:
+            minutes = int(duration.split("m")[0].split()[-1])
+        except:
+            minutes = 0
+
+    return hours * 60 + minutes
+
+
+# ===============================
 # LOAD DATA
 # ===============================
 @st.cache_data
 def load_data():
     df = pd.read_csv("flights.csv")
 
-    # Convert date safely
-    if "date_of_journey" in df.columns:
-        df["date_of_journey"] = pd.to_datetime(df["date_of_journey"], errors="coerce")
+    # Date conversion safe
+    df["date_of_journey"] = pd.to_datetime(df["date_of_journey"], errors="coerce")
+
+    # Duration numeric conversion
+    df["Duration_Minutes"] = df["Duration"].apply(convert_duration_to_minutes)
+
+    # Stops conversion safe
+    df["Total_stops"] = df["Total_stops"].astype(str)
 
     return df
 
@@ -30,7 +61,7 @@ def load_data():
 df = load_data()
 
 # ===============================
-# AIRLINE LOGOS (NO DOWNLOAD SAFE)
+# AIRLINE LOGOS (SAFE ONLINE)
 # ===============================
 AIRLINE_LOGOS = {
     "IndiGo": "https://logos-world.net/wp-content/uploads/2023/01/IndiGo-Logo.png",
@@ -72,10 +103,10 @@ filtered = df[
 # HEADER
 # ===============================
 st.title("✈️ Flight Analytics Premium Dashboard")
-st.markdown("### Professional Airline Price + Route Intelligence System")
+st.markdown("### Professional Airline Pricing + Route Intelligence System")
 
 # ===============================
-# SHOW LOGOS (SAFE)
+# SHOW AIRLINE LOGOS
 # ===============================
 st.subheader("🏢 Selected Airlines")
 
@@ -103,20 +134,20 @@ c4.metric("Min Price", f"₹{filtered['Price'].min():.0f}")
 st.markdown("---")
 
 # ===============================
-# REAL 30 UNIQUE CHARTS
+# 30 UNIQUE CHARTS (ERROR-FREE)
 # ===============================
 st.subheader("📊 Interactive Chart Explorer (30 Unique Charts)")
 
 charts = {}
 
 charts["1. Price Distribution"] = px.histogram(filtered, x="Price")
-charts["2. Airline-wise Price Comparison"] = px.box(filtered, x="airline", y="Price")
+charts["2. Airline Price Comparison"] = px.box(filtered, x="airline", y="Price")
 charts["3. Stops Distribution"] = px.pie(filtered, names="Total_stops")
 charts["4. Flights per Airline"] = px.bar(filtered["airline"].value_counts())
-charts["5. Flights per Source City"] = px.bar(filtered["Source"].value_counts())
-charts["6. Flights per Destination City"] = px.bar(filtered["destination"].value_counts())
+charts["5. Flights per Source"] = px.bar(filtered["Source"].value_counts())
+charts["6. Flights per Destination"] = px.bar(filtered["destination"].value_counts())
 charts["7. Top 10 Routes"] = px.bar(filtered["route"].value_counts().head(10))
-charts["8. Duration vs Price"] = px.scatter(filtered, x="Duration", y="Price")
+charts["8. Duration vs Price"] = px.scatter(filtered, x="Duration_Minutes", y="Price")
 charts["9. Stops Impact on Price"] = px.box(filtered, x="Total_stops", y="Price")
 charts["10. Avg Price per Airline"] = px.bar(filtered.groupby("airline")["Price"].mean())
 
@@ -126,47 +157,70 @@ charts["13. Avg Price by Source"] = px.bar(filtered.groupby("Source")["Price"].m
 charts["14. Avg Price by Destination"] = px.bar(filtered.groupby("destination")["Price"].mean())
 
 charts["15. Stops Count by Airline"] = px.bar(filtered.groupby("airline")["Total_stops"].count())
-charts["16. Price Trend Over Journey Date"] = px.line(filtered.sort_values("date_of_journey"),
-                                                      x="date_of_journey", y="Price")
 
-charts["17. Airline vs Duration Avg"] = px.bar(filtered.groupby("airline")["Duration"].mean())
-charts["18. Route vs Avg Price"] = px.bar(filtered.groupby("route")["Price"].mean().head(10))
+charts["16. Price Trend Over Time"] = px.line(
+    filtered.sort_values("date_of_journey"),
+    x="date_of_journey",
+    y="Price"
+)
 
-charts["19. Price by Day of Month"] = px.histogram(filtered, x=filtered["date_of_journey"].dt.day)
-charts["20. Monthly Price Trend"] = px.line(filtered.groupby(filtered["date_of_journey"].dt.month)["Price"].mean())
+charts["17. Airline vs Avg Duration"] = px.bar(
+    filtered.groupby("airline")["Duration_Minutes"].mean(),
+    title="Average Duration (Minutes) by Airline"
+)
 
-charts["21. Stops vs Duration"] = px.scatter(filtered, x="Total_stops", y="Duration")
+charts["18. Route Avg Price"] = px.bar(filtered.groupby("route")["Price"].mean().head(10))
+
+charts["19. Price by Day"] = px.histogram(filtered, x=filtered["date_of_journey"].dt.day)
+
+charts["20. Monthly Price Trend"] = px.line(
+    filtered.groupby(filtered["date_of_journey"].dt.month)["Price"].mean()
+)
+
+charts["21. Stops vs Duration"] = px.scatter(filtered, x="Total_stops", y="Duration_Minutes")
+
 charts["22. Airline Share Pie"] = px.pie(filtered, names="airline")
 
-charts["23. Source vs Destination Flights"] = px.density_heatmap(filtered, x="Source", y="destination")
+charts["23. Source vs Destination Heatmap"] = px.density_heatmap(filtered, x="Source", y="destination")
 
-charts["24. Price Heatmap Stops-Airline"] = px.density_heatmap(filtered, x="airline", y="Total_stops", z="Price")
+charts["24. Price Heatmap Airline-Stops"] = px.density_heatmap(
+    filtered,
+    x="airline",
+    y="Total_stops",
+    z="Price"
+)
 
-charts["25. Cheapest Routes"] = px.bar(filtered.groupby("route")["Price"].min().sort_values().head(10))
-charts["26. Expensive Routes"] = px.bar(filtered.groupby("route")["Price"].max().sort_values(ascending=False).head(10))
+charts["25. Cheapest Routes"] = px.bar(
+    filtered.groupby("route")["Price"].min().sort_values().head(10)
+)
+
+charts["26. Expensive Routes"] = px.bar(
+    filtered.groupby("route")["Price"].max().sort_values(ascending=False).head(10)
+)
 
 charts["27. Airline Price Variability"] = px.violin(filtered, x="airline", y="Price")
-charts["28. Duration Distribution"] = px.histogram(filtered, x="Duration")
 
-charts["29. Stops Distribution by Airline"] = px.histogram(filtered, x="Total_stops", color="airline")
+charts["28. Duration Distribution"] = px.histogram(filtered, x="Duration_Minutes")
 
-charts["30. Price vs Source City Scatter"] = px.scatter(filtered, x="Source", y="Price", color="airline")
+charts["29. Stops by Airline Histogram"] = px.histogram(filtered, x="Total_stops", color="airline")
+
+charts["30. Price vs Source Scatter"] = px.scatter(filtered, x="Source", y="Price", color="airline")
 
 # ===============================
-# DRAG & DROP STYLE SELECTOR
+# CHART SELECTOR (Drag Style Explorer)
 # ===============================
-selected_chart = st.selectbox("📌 Select Any Chart to Display", list(charts.keys()))
+selected_chart = st.selectbox("📌 Select Any Chart", list(charts.keys()))
 
 st.plotly_chart(charts[selected_chart], use_container_width=True)
 
 # ===============================
-# DATA TABLE VIEW
+# DATA TABLE
 # ===============================
-st.subheader("📄 Flight Dataset Table")
+st.subheader("📄 Filtered Flight Dataset")
 st.dataframe(filtered, use_container_width=True)
 
 # ===============================
-# PDF REPORT DOWNLOAD (SAFE)
+# PDF REPORT DOWNLOAD
 # ===============================
 st.subheader("📥 Download Analytics Report")
 
@@ -195,5 +249,4 @@ if st.button("📄 Generate PDF Report"):
             mime="application/pdf"
         )
 
-st.success("✅ Dashboard Fully Deployment Ready (No Errors)")
-
+st.success("✅ Premium Dashboard Ready for Streamlit Cloud Deployment (No Errors)")
